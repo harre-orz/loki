@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/loki/clients/pkg/promtail/client"
 	"github.com/grafana/loki/clients/pkg/promtail/positions"
 	"github.com/grafana/loki/clients/pkg/promtail/targets/target"
+	"golang.org/x/text/encoding"
 )
 
 const (
@@ -74,6 +75,7 @@ type FileTarget struct {
 	tails map[string]*tailer
 
 	targetConfig *Config
+	encoding encoding.Encoding
 }
 
 // NewFileTarget create a new FileTarget.
@@ -88,6 +90,7 @@ func NewFileTarget(
 	targetConfig *Config,
 	fileEventWatcher chan fsnotify.Event,
 	targetEventHandler chan fileTargetEvent,
+	encoding encoding.Encoding,
 ) (*FileTarget, error) {
 	t := &FileTarget{
 		logger:             logger,
@@ -103,6 +106,7 @@ func NewFileTarget(
 		targetConfig:       targetConfig,
 		fileEventWatcher:   fileEventWatcher,
 		targetEventHandler: targetEventHandler,
+		encoding:           encoding,
 	}
 
 	err := t.sync()
@@ -279,7 +283,7 @@ func (t *FileTarget) startTailing(ps []string) {
 			continue
 		}
 		level.Debug(t.logger).Log("msg", "tailing new file", "filename", p)
-		tailer, err := newTailer(t.metrics, t.logger, t.handler, t.positions, p)
+		tailer, err := newTailer(t.metrics, t.logger, t.handler, t.positions, p, t.encoding)
 		if err != nil {
 			level.Error(t.logger).Log("msg", "failed to start tailer", "error", err, "filename", p)
 			continue

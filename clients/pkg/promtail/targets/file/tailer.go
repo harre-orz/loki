@@ -16,6 +16,8 @@ import (
 
 	"github.com/grafana/loki/pkg/logproto"
 	"github.com/grafana/loki/pkg/util"
+
+	"golang.org/x/text/encoding"
 )
 
 type tailer struct {
@@ -34,9 +36,10 @@ type tailer struct {
 	posquit chan struct{}
 	posdone chan struct{}
 	done    chan struct{}
+	decoder *encoding.Decoder
 }
 
-func newTailer(metrics *Metrics, logger log.Logger, handler api.EntryHandler, positions positions.Positions, path string) (*tailer, error) {
+func newTailer(metrics *Metrics, logger log.Logger, handler api.EntryHandler, positions positions.Positions, path string, encoding encoding.Encoding) (*tailer, error) {
 	// Simple check to make sure the file we are tailing doesn't
 	// have a position already saved which is past the end of the file.
 	fi, err := os.Stat(path)
@@ -79,6 +82,7 @@ func newTailer(metrics *Metrics, logger log.Logger, handler api.EntryHandler, po
 		posquit:   make(chan struct{}),
 		posdone:   make(chan struct{}),
 		done:      make(chan struct{}),
+		decoder:  encoding.NewDecoder(),
 	}
 
 	go tailer.readLines()
@@ -118,6 +122,15 @@ func (t *tailer) updatePosition() {
 	}
 }
 
+func (t *tailer) convertToUTF8(line *tail.Line) {
+	text, err := t.decoder.String(line.Text)
+	if err != nil {
+		ine.Err = err
+		return
+	}
+	line.Text = text
+}
+
 // readLines runs in a goroutine and consumes the t.tail.Lines channel from the underlying tailer.
 // it will only exit when that channel is closed. This is important to avoid a deadlock in the underlying
 // tailer which can happen if there are unread lines in this channel and the Stop method on the tailer
@@ -142,7 +155,7 @@ func (t *tailer) readLines() {
 			level.Info(t.logger).Log("msg", "tail routine: tail channel closed, stopping tailer", "path", t.path, "reason", t.tail.Tomb.Err())
 			return
 		}
-
+		t.convertToUTF8(line)
 		// Note currently the tail implementation hardcodes Err to nil, this should never hit.
 		if line.Err != nil {
 			level.Error(t.logger).Log("msg", "tail routine: error reading line", "path", t.path, "error", line.Err)

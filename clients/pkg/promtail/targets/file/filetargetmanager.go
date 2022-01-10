@@ -27,6 +27,8 @@ import (
 	"github.com/grafana/loki/clients/pkg/promtail/targets/target"
 
 	"github.com/grafana/loki/pkg/util"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/ianaindex"
 )
 
 const (
@@ -116,6 +118,14 @@ func NewFileTargetManager(
 			}
 		}
 
+		encoding := encoding.Nop
+		if cfg.Encoding != "" {
+			encoding, err = ianaindex.IANA.Encoding(cfg.Encoding)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		s := &targetSyncer{
 			metrics:           metrics,
 			log:               logger,
@@ -127,6 +137,7 @@ func NewFileTargetManager(
 			entryHandler:      pipeline.Wrap(client),
 			targetConfig:      targetConfig,
 			fileEventWatchers: map[string]chan fsnotify.Event{},
+			encoding:          encoding,
 		}
 		tm.syncers[cfg.JobName] = s
 		configs[cfg.JobName] = cfg.ServiceDiscoveryConfig.Configs()
@@ -231,6 +242,7 @@ type targetSyncer struct {
 
 	relabelConfig []*relabel.Config
 	targetConfig  *Config
+	encoding      encoding.Encoding
 }
 
 // sync synchronize target based on received target groups received by service discovery
@@ -341,7 +353,7 @@ func (s *targetSyncer) sendFileCreateEvent(event fsnotify.Event) {
 }
 
 func (s *targetSyncer) newTarget(path string, labels model.LabelSet, discoveredLabels model.LabelSet, fileEventWatcher chan fsnotify.Event, targetEventHandler chan fileTargetEvent) (*FileTarget, error) {
-	return NewFileTarget(s.metrics, s.log, s.entryHandler, s.positions, path, labels, discoveredLabels, s.targetConfig, fileEventWatcher, targetEventHandler)
+	return NewFileTarget(s.metrics, s.log, s.entryHandler, s.positions, path, labels, discoveredLabels, s.targetConfig, fileEventWatcher, targetEventHandler, s.encoding)
 }
 
 func (s *targetSyncer) DroppedTargets() []target.Target {

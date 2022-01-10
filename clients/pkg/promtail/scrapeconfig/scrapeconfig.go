@@ -45,6 +45,7 @@ type Config struct {
 	CloudflareConfig       *CloudflareConfig          `yaml:"cloudflare,omitempty"`
 	RelabelConfigs         []*relabel.Config          `yaml:"relabel_configs,omitempty"`
 	ServiceDiscoveryConfig ServiceDiscoveryConfig     `yaml:",inline"`
+	Encoding               string                     `yaml:"encoding,omitempty"`
 }
 
 type ServiceDiscoveryConfig struct {
